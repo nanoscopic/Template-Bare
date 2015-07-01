@@ -8,7 +8,7 @@ package Template::Bare;
 use Exporter;
 use Carp;
 @ISA = qw(Exporter);
-@EXPORT_OK = qw(fill_in_string tpl_to_chunks);
+@EXPORT_OK = qw(fill_in_string tpl_to_chunks create_delayed fill_in_delayed);
 use strict;
 $Template::Bare::VERSION = '0.01';
 sub new { my $pkg = shift; return bless { @_ }, $pkg; }
@@ -72,7 +72,16 @@ sub fill_in {
     my $res = eval $progtext;
     my $eval_err = $@;
     $res = $OUT if defined $OUT;
-    die $self->{'origin'} . " - Template error ``$eval_err''" if( $eval_err );
+    if( $eval_err ) {
+      print STDERR $self->{'origin'} . " Template error\n";
+      chomp $eval_err;
+      print STDERR "  Error: $eval_err\n";
+      print STDERR "  template: $text\n";
+      die;
+    }
+    if( ! defined $res ) {
+      print STDERR "Template chunk evaluated to undefined: -- $text --\n";
+    }
     $r .= $res;
   }
   return $r;
@@ -143,6 +152,37 @@ sub tpl_to_chunks {
 sub fill_in_string {
   my ( $string, $hash, $package, $more ) = @_;
   my ( $op, $of, $ol ) = caller; $more ||= '';
+  return Template::Bare->new( source => $string, hash => $hash, package => $package, origin => "$of - $ol - $more" )->compile()->fill_in();
+}
+
+sub create_delayed {
+  my ( $string, $hash, $package, $more ) = @_;
+  $more ||= '';
+  my $clone = weak_clone( $hash );
+  return { str => $string, hash => $clone, package => $package, more => $more };
+}
+
+sub weak_clone {
+  my $hash = shift;
+  my %dup;
+  for my $key ( keys %$hash ) {
+    $dup{ $key } = $hash->{ $key };
+  }
+  if( $hash->{'byname'} ) {
+    $dup{'byname'} = weak_clone( $hash->{'byname'} );
+  }
+  return \%dup;
+}
+
+sub fill_in_delayed {
+  my ( $object, $hash_more ) = @_;
+  my ( $op, $of, $ol ) = caller;
+  my $string = $object->{'str'};
+  my $hash = $object->{'hash'};
+  my $package = $object->{'package'};
+  my $more = $object->{'more'};
+  $hash = { %$hash, %$hash_more };
+  $hash->{'ctx'} = $hash;
   return Template::Bare->new( source => $string, hash => $hash, package => $package, origin => "$of - $ol - $more" )->compile()->fill_in();
 }
 1;
