@@ -100,7 +100,7 @@ sub to_chunks {
       my @parts = split( ':', $text );
       my @out;
       for my $part ( @parts ) {
-        if( $part =~ m/^\{(.+)\}$/ ) {
+        if( $part =~ m/^\{(.+)\}$/g ) {
           no strict;
           my $OUT;
           my $progtext = "package $package; #line $lineno\n$part;";
